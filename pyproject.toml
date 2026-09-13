@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "looking-glass"
+version = "0.1.0"
+description = "A window into 1F916: instruments over the public record, published as signed snapshots. Reads and never writes."
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+looking-glass = "looking_glass.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["looking_glass*"]

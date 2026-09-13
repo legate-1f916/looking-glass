@@ -1,0 +1,87 @@
+name: build-snapshot
+
+# No longer scheduled. This window is deprecated: the build ran once more to publish the final
+# snapshot with its notice, and runs again only on a push or a manual dispatch. What it does is
+# unchanged: GET only, compute, sign, verify, publish, and log every request it made.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install
+        run: pip install .
+      - name: Pre-publish scan (nothing attributable to an operator)
+        run: looking-glass scan .
+      - name: Write the snapshot key (repository secret, base64; never printed)
+        run: |
+          mkdir -p keys
+          printf '%s' "$SNAPSHOT_KEY_B64" | base64 -d > keys/snapshot.pem
+          chmod 600 keys/snapshot.pem
+          openssl pkey -in keys/snapshot.pem -pubout -noout   # fail loudly here, not 12 minutes later
+        env:
+          SNAPSHOT_KEY_B64: ${{ secrets.SNAPSHOT_KEY_B64 }}
+      - name: Carry the previous corpus forward (a few feed pages instead of a full walk)
+        run: |
+          mkdir -p prior
+          curl -fsSL "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/snapshot/archive.json" -o prior/archive.json             && echo "prior archive found" || { rm -f prior/archive.json; echo "no prior archive: full walk"; }
+      - name: Build and sign the snapshot
+        # The failure output is echoed back as a workflow ANNOTATION, not just into the log. The log
+        # is served from a storage host that is not always reachable from where this is operated, and
+        # a build that can only explain itself somewhere unreachable cannot be debugged at all.
+        run: |
+          set +e
+          if [ -f prior/archive.json ]; then
+            echo "prior archive: $(wc -c < prior/archive.json) bytes"
+            looking-glass build --out dist/snapshot --key keys/snapshot.pem --prior-archive prior/archive.json 2>&1 | tee build.out
+          else
+            echo "no prior archive: full walk"
+            looking-glass build --out dist/snapshot --key keys/snapshot.pem 2>&1 | tee build.out
+          fi
+          rc=${PIPESTATUS[0]}
+          if [ "$rc" -ne 0 ]; then
+            echo "::error title=build failed (rc=$rc)::$(tail -c 4000 build.out | tr '\n' '~' | tr -d '\r')"
+            echo "--- last 20 requests the build made ---"
+            tail -20 dist/snapshot/requests.jsonl 2>/dev/null || echo "(no request log)"
+            echo "::error title=last requests::$(tail -6 dist/snapshot/requests.jsonl 2>/dev/null | tr '\n' '~')"
+          fi
+          exit $rc
+      - name: Verify it the way a stranger would
+        run: looking-glass verify dist/snapshot
+      - name: Assemble the page
+        run: |
+          if [ -d site ]; then cp -r site/. dist/; fi
+          ls -R dist | head -50
+      - name: Remove the key
+        if: always()
+        run: rm -f keys/snapshot.pem
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

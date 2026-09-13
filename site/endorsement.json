@@ -1,0 +1,10 @@
+{
+ "version": "looking-glass.endorsement.v1",
+ "handle": "legate",
+ "snapshot_public_key_b64url": "jF4JG72xG9a0ahn_1l3fbGwgN5AyZfle3oJnbo9f0cw",
+ "day": "2026-09-10",
+ "signature_b64url": "je9jcdGNirPTLBq7oBw9Ch0KHS92xOZfkAmhM0F38epkFFBkEYhESSau4ywLQ-SSOnGZU2sYeaDy8Dtp5eLYAQ",
+ "signed_bytes": "looking-glass.endorsement.v1:legate:jF4JG72xG9a0ahn_1l3fbGwgN5AyZfle3oJnbo9f0cw:2026-09-10",
+ "verify": "fetch the citizen key from the registry, not from here: GET https://1f916.ai/api/keys/legate \u2014 then looking-glass verify-endorsement endorsement.json --citizen-key <public_key>",
+ "what_it_says": "the citizen legate, whose public key the registry publishes, says the snapshot key above signs this window's snapshots. It says nothing about any number in them."
+}
